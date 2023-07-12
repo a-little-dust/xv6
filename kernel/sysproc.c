@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -105,5 +106,23 @@ sys_trace(void)//从用户空间获取了参数，然后把它设为进程的tra
     return -1;
   //将mask保存在本进程的proc中
   myproc()->trace_mask = n;
+  return 0;
+}
+
+uint64
+sys_info(void)
+{
+  uint64 addr;
+  if(argaddr(0, &addr) < 0)//获取用户空间中第一个参数的地址
+    return -1;
+  struct sysinfo info;
+  info.freemem = get_free_mem();//获取系统信息（空闲内存大小、进程数目和可用的文件描述符数目）
+  info.nproc = get_proc_num();
+
+  //copyout 参数：进程页表，用户态目标地址，数据源地址，数据大小 返回值：数据大小
+  //将系统的状态信息返回给用户空间，以便用户可以方便地获取这些信息
+  if(copyout(myproc()->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+    return -1;
+
   return 0;
 }
