@@ -95,3 +95,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_trace(void)//从用户空间获取了参数，然后把它设为进程的trace_mask
+{
+  int n;
+  //获取追踪的mask
+  if(argint(0, &n) < 0)//把第一个参数存进n 它代表追踪的mask，值可以是0、1、2
+    return -1;
+  //将mask保存在本进程的proc中
+  myproc()->trace_mask = n;
+  return 0;
+}
