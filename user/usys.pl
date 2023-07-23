@@ -36,3 +36,6 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+#从用户态到内核态的跳板函数
+entry("sigalarm");
+entry("sigreturn");
