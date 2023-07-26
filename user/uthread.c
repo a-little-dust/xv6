@@ -9,11 +9,29 @@
 
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
-
+// saved registers for thread context switches
+struct threadcontext {
+	uint64 ra;
+	uint64 sp;
+	// callee-saved
+	uint64 s0;
+	uint64 s1;
+	uint64 s2;
+	uint64 s3;
+	uint64 s4;
+	uint64 s5;
+	uint64 s6;
+	uint64 s7;
+	uint64 s8;
+	uint64 s9;
+	uint64 s10;
+	uint64 s11;
+};
 
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
+  struct threadcontext context;
 
 };
 struct thread all_thread[MAX_THREAD];
@@ -55,14 +73,16 @@ thread_schedule(void)
     exit(-1);
   }
 
-  if (current_thread != next_thread) {         /* switch threads?  */
+  if (current_thread != next_thread) {  /* switch threads?  */
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
-    /* YOUR CODE HERE
-     * Invoke thread_switch to switch from t to next_thread:
-     * thread_switch(??, ??);
+    /* Invoke thread_switch to switch from t to next_thread:
      */
+	thread_switch(
+        (uint64)&t->context, 
+        (uint64)&next_thread->context
+    );  // (+) 只需添加这个调用
   } else
     next_thread = 0;
 }
@@ -70,13 +90,14 @@ thread_schedule(void)
 void 
 thread_create(void (*func)())
 {
-  struct thread *t;
+   struct thread *t;
 
   for (t = all_thread; t < all_thread + MAX_THREAD; t++) {
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
-  // YOUR CODE HERE
+  t->context.ra = (uint64)func;
+  t->context.sp = (uint64)&t->stack[STACK_SIZE-1];
 }
 
 void 
