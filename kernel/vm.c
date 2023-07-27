@@ -159,25 +159,27 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
-void
-uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
 
-  if((va % PGSIZE) != 0)
+  if ((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
 
-  for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
-    if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
-    if(PTE_FLAGS(*pte) == PTE_V)
+  for (a = va; a < va + npages * PGSIZE; a += PGSIZE)
+  {
+    if ((pte = walk(pagetable, a, 0)) == 0)
+      continue;
+    //   panic("uvmunmap: walk");
+    // if((*pte & PTE_V) == 0)
+    //   panic("uvmunmap: not mapped");
+    if (PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    if(do_free){
+    if (do_free && (*pte & PTE_V) != 0)
+    {
       uint64 pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      kfree((void *)pa);
     }
     *pte = 0;
   }
@@ -305,11 +307,12 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+    if ((*pte & PTE_V) == 0)
+      continue; // 如果尚未分配物理页，允许*pte & PTE_V为空
+                // panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
+    if ((mem = kalloc()) == 0)
       goto err;
     memmove(mem, (char*)pa, PGSIZE);
     if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){

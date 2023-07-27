@@ -49,11 +49,12 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
+
+  if (r_scause() == 8)
+  {
     // system call
 
-    if(p->killed)
+    if (p->killed)
       exit(-1);
 
     // sepc points to the ecall instruction,
@@ -65,19 +66,34 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }
+  else if ((which_dev = devintr()) != 0)
+  {
     // ok
-  } else {
+  } // 补充
+  else if (r_scause() == 0xd || r_scause() == 0xf)
+  {
+    // 因为包含关系的问题, 我们直接把函数放到 sysfile.c 里面
+    // printf("%p\n%p\n", r_stval(), PGROUNDDOWN(r_stval()));
+    if (!map_mmap(p, r_stval()))
+    {
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
+  }
+  else
+  {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
 
-  if(p->killed)
+  if (p->killed)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if (which_dev == 2)
     yield();
 
   usertrapret();

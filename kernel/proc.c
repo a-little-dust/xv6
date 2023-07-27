@@ -302,6 +302,15 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  for(int i = 0; i < MAXVMA; ++i) {
+    if(p->vma[i].length) {
+        memmove(&(np->vma[i]), &(p->vma[i]), sizeof(struct VMA));
+        filedup(p->vma[i].file);
+    } else {
+        np->vma[i].length = 0;
+    }
+}
+
   release(&np->lock);
 
   return pid;
@@ -341,12 +350,24 @@ exit(int status)
 {
   struct proc *p = myproc();
 
-  if(p == initproc)
+  if (p == initproc)
     panic("init exiting");
 
+  for (int i = 0; i < MAXVMA; i++)
+  { // 释放映射的文件区域
+    struct VMA *v = &(p->vma[i]);
+    if (v->length != 0)
+    {
+      uvmunmap(p->pagetable, v->start, v->length / PGSIZE, 1);
+      v->length = 0;
+    }
+  }
+
   // Close all open files.
-  for(int fd = 0; fd < NOFILE; fd++){
-    if(p->ofile[fd]){
+  for (int fd = 0; fd < NOFILE; fd++)
+  {
+    if (p->ofile[fd])
+    {
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
