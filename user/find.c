@@ -54,7 +54,8 @@ void find(char *path, char *name){
             strcpy(buf, path);//把目录路径加入buf
             p = buf+strlen(buf);
             *p++ = '/';//在路径末尾加上'/'
-            while(read(fd, &de, sizeof(de)) == sizeof(de)){//de包含了文件信息。这一步是从打开的目录文件中读取文件信息，并将其保存在de变量中，sizeof(de)是文件大小，如果读取成功则==
+            while(read(fd, &de, sizeof(de)) == sizeof(de)){//de包含了文件信息。
+            //这一步是从打开的目录文件中读取文件信息，并将其保存在de变量中，sizeof(de)是文件大小，如果读取成功则==
                 if(de.inum == 0)
                     continue;
                 if(de.name[0] == '.' && de.name[1] == 0) continue;//如果是'.'或'..'目录，不用检查
