@@ -700,12 +700,12 @@ procdump(void)
 }
 
 int
-get_proc_num(void){//获取空闲进程的数量
+get_proc_num(void){//获取不空闲的进程的数量
   struct proc *p;
   int num = 0;
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if(p->state == UNUSED) {//状态为unused说明该进程未被使用
+    if(p->state != UNUSED) {//状态为unused说明该进程未被使用
     //并且没有被分配给任何一个用户或者任务，因此可以将其视为系统中空闲的进程
       ++num;
     }
