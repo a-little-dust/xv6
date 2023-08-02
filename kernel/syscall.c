@@ -134,9 +134,11 @@ static uint64 (*syscalls[])(void) = {
 };
 
 //创建一个字符串数组来储存系统调用名
-static char syscall_name[23][16] = {"fork", "exit", "wait", "pipe", "read", "kill", "exec", "fstat", 
-"chdir", "dup", "getpid", "sbrk", "sleep", "uptime", "open", "write", "mknod", "unlink", "link", 
-"mkdir", "close", "trace", "sys_info"};
+static char *syscall_name[] = {
+        "", "fork", "exit", "wait", "pipe", "read", "kill", "exec", "fstat", "chdir", "dup",
+        "getpid", "sbrk", "sleep", "uptime", "open", "write", "mknod", "unlink", "link", "mkdir",
+        "close", "trace"
+};
 
 void
 syscall(void)

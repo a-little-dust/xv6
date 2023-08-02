@@ -107,7 +107,7 @@ sys_trace(void)//从用户空间获取了参数，然后把它设为进程的tra
   //将mask保存在本进程的proc中
   struct proc *pro = myproc();
   printf("trace pid: %d\n", pro->pid);
-  pro->trace_mask = mask;
+  pro->trace_mask = n;
   return 0;
 }
 
