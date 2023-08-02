@@ -134,7 +134,9 @@ static uint64 (*syscalls[])(void) = {
 };
 
 //创建一个字符串数组来储存系统调用名
-static char syscall_name[23][16] = {"fork", "exit", "wait", "pipe", "read", "kill", "exec", "fstat", "chdir", "dup", "getpid", "sbrk", "sleep", "uptime", "open", "write", "mknod", "unlink", "link", "mkdir", "close", "trace", "sys_info"};
+static char syscall_name[23][16] = {"fork", "exit", "wait", "pipe", "read", "kill", "exec", "fstat", 
+"chdir", "dup", "getpid", "sbrk", "sleep", "uptime", "open", "write", "mknod", "unlink", "link", 
+"mkdir", "close", "trace", "sys_info"};
 
 void
 syscall(void)
@@ -144,21 +146,20 @@ syscall(void)
 
   //系统调用号储存在a7
   num = p->trapframe->a7;
-  //第一个参数储存在a0
-  int first_arg = p->trapframe->a0;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) 
   {
     //返回值储存在a0
     p->trapframe->a0 = syscalls[num]();
     //用位操作判断mask是否覆盖了当前调用号
-    if(p->trace_mask > 0 && (p->trace_mask&(1<<num)))
+    if(p->trace_mask&(1<<num))
     {
-      printf("%d: sys_%s(%d) -> %d\n", p->pid, syscall_name[num-1], first_arg, p->trapframe->a0);
+      printf("%d: syscall %s -> %d\n", p->pid, syscall_name[num], p->trapframe->a0);
     }
   } 
   else 
   {
-    printf("%d %s: unknown sys call %d\n",p->pid, p->name, num);
+    printf("%d %s: unknown sys call %d\n",
+            p->pid, p->name, num);
     p->trapframe->a0 = -1;
   }
 }

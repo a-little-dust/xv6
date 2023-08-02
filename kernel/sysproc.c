@@ -105,7 +105,9 @@ sys_trace(void)//从用户空间获取了参数，然后把它设为进程的tra
   if(argint(0, &n) < 0)//把第一个参数存进n 它代表追踪的mask，值可以是0、1、2
     return -1;
   //将mask保存在本进程的proc中
-  myproc()->trace_mask = n;
+  struct proc *pro = myproc();
+  printf("trace pid: %d\n", pro->pid);
+  pro->trace_mask = mask;
   return 0;
 }
 

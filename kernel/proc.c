@@ -150,6 +150,8 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  // trace
+  p->trace_mask = 0;
 }
 
 // Create a user page table for a given process,
@@ -698,13 +700,13 @@ procdump(void)
 }
 
 int
-get_proc_num(void){
-
+get_proc_num(void){//获取空闲进程的数量
   struct proc *p;
   int num = 0;
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if(p->state == UNUSED) {//状态为unused说明该进程未被使用,并没有被分配给任何一个用户或者任务，因此可以将其视为系统中空闲的进程
+    if(p->state == UNUSED) {//状态为unused说明该进程未被使用
+    //并且没有被分配给任何一个用户或者任务，因此可以将其视为系统中空闲的进程
       ++num;
     }
     release(&p->lock);
