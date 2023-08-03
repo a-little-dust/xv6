@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace(); // 调用backtrace函数
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -138,14 +139,12 @@ void
 backtrace(void)
 {
   printf("backtrace:\n");
-
-  uint64 addr = r_fp();
+  uint64 addr = r_fp();//获取当前函数栈帧的帧指针
   while (PGROUNDUP(addr) - PGROUNDDOWN(addr) == PGSIZE)
   {
     uint64 ret_addr = *(uint64 *)(addr - 8);
-    printf("%p\n", ret_addr);
-    addr = *((uint64 *)(addr - 16));
+    printf("%p\n", ret_addr);//打印ret_addr的值
+    addr = *((uint64 *)(addr - 16));//获取下一个栈帧的帧指针
   }
-  
 }
 

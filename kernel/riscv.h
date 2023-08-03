@@ -6,12 +6,12 @@ r_mhartid()
   asm volatile("csrr %0, mhartid" : "=r" (x) );
   return x;
 }
-//指向某个函数使用的栈地址的顶端
+//读取当前帧指针
 static inline uint64
 r_fp()
 {
   uint64 x;
-  asm volatile("mv %0, s0" : "=r" (x) );
+  asm volatile("mv %0, s0" : "=r" (x) );//这是一个内联汇编表达式，用于将寄存器s0的值移动到变量x中
   return x;
 }
 
