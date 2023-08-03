@@ -445,67 +445,74 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   // }
 }
 //递归打印
-void _vmprint(pagetable_t pagetable, int level) {
-  for (int i = 0; i < 512; i++) {
-    pte_t pte = pagetable[i];
-	if (pte & PTE_V) {
-      uint64 pa = PTE2PA(pte);
-      for (int j = 0; j < level; j++) {
-		if (j) printf(" ");
-		printf("..");
-	  }
-	  printf("%d: pte %p pa %p\n", i, pte, pa);
-	  if ((pte & (PTE_R | PTE_W | PTE_X)) == 0) {
-	    _vmprint((pagetable_t)pa, level+1);
-	  }
-	}
+void _vmprint(pagetable_t pagetable, int level)
+{//打印页表的内容，以及根据页表的层级缩进打印每个条目的层次结构信息
+  for (int i = 0; i < 512; i++)
+  {//循环遍历页表的条目
+    pte_t pte = pagetable[i];//将第 i 个条目赋值给变量 pte
+    if (pte & PTE_V)//检查页表条目的有效位。如果有效位为真，表示该条目有效。
+    {
+      uint64 pa = PTE2PA(pte);//将页表条目转换为物理地址，并赋值给变量 pa
+      for (int j = 0; j < level; j++)
+      {//根据当前层级 level ,用 for 循环打印缩进符号
+        if (j)
+          printf(" ");
+        printf("..");
+      }
+      //打印条目的索引 i、页表条目的值 pte 和物理地址 pa
+      printf("%d: pte %p pa %p\n", i, pte, pa);
+      if ((pte & (PTE_R | PTE_W | PTE_X)) == 0)
+      {//检查页表条目中的读、写和执行标志位是否都为零。如果都为零，表示该条目对应的下一级页表存在，并且没有权限限制。
+        _vmprint((pagetable_t)pa, level + 1);// 递归调用_vmprint函数，传递下一级页表的地址pa，并将层级level加1
+      }
+    }
   }
 }
 
 void vmprint(pagetable_t pagetable) {
-  printf("page table %p\n", pagetable);
+  printf("page table %p\n", pagetable);//用&p，打印 pagetable 变量的指针值的十六进制表示形式
   _vmprint(pagetable, 1);
 }
+
 //参照kvminit
 void ukvmmap(pagetable_t kpagetable, uint64 va, uint64 pa, uint64 sz, int perm) 
-{
-  if(mappages(kpagetable, va, sz, pa, perm) != 0)
+{//将一段虚拟地址范围 va 到 va+sz 映射到物理地址范围 pa 到 pa+sz
+  if(mappages(kpagetable, va, sz, pa, perm) != 0)//调用 mappages 函数来将虚拟地址范围映射到物理地址范围
     panic("uvmmap");
 }
-pagetable_t ukvminit() 
-{
-  pagetable_t kpagetable = (pagetable_t) kalloc();
-  memset(kpagetable, 0, PGSIZE);
-  ukvmmap(kpagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+pagetable_t ukvminit() //初始化内核页表
+{//使用 kalloc 函数在内核堆中分配一块内存，用于存储内核页表，并将分配的内存强制类型转换为 pagetable_t 类型的指针 kpagetable
+  pagetable_t kpagetable = (pagetable_t) kalloc(); 
+  memset(kpagetable, 0, PGSIZE);//使用 memset 函数将 kpagetable 内存块的内容全部初始化为零
+  ukvmmap(kpagetable, UART0, UART0, PGSIZE, PTE_R | PTE_W);//将UART0的虚拟地址范围映射到UART0的物理地址范围，并设置读写权限
   ukvmmap(kpagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
   ukvmmap(kpagetable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
   ukvmmap(kpagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
   ukvmmap(kpagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
   ukvmmap(kpagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
   ukvmmap(kpagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
-  return kpagetable;
+  return kpagetable;//将创建好的内核页表 kpagetable 返回
 }
 
-void
+void//将用户空间的映射复制到内核空间的页表中
 u2kvmcopy(pagetable_t pagetable, pagetable_t kpagetable, uint64 oldsz, uint64 newsz)
-{
-  pte_t *pte_from, *pte_to;
-  uint64 a, pa;
-  uint flags;
-
-  if (newsz < oldsz)
-    return;
-  
-  oldsz = PGROUNDUP(oldsz);
+{//pagetable 是用户页表指针，kpagetable 是内核页表指针，oldsz 是旧的用户空间大小，newsz 是新的用户空间大小。
+  pte_t *pte_from, *pte_to;//定义两个指向页表项的指针，用于遍历用户页表和内核页表
+  uint64 a, pa;//用于保存虚拟地址和物理地址
+  uint flags;//用于保存页表项的标志
+  if (newsz < oldsz)//如果新的用户空间大小小于旧的用户空间大小，则直接返回
+    return; 
+  oldsz = PGROUNDUP(oldsz);//将旧的用户空间大小向上对齐到页的边界
   for (a = oldsz; a < newsz; a += PGSIZE)
-  {
+  {//调用 walk 函数，在用户页表中查找给定虚拟地址对应的页表项，并将结果保存在 pte_from 变量中
     if ((pte_from = walk(pagetable, a, 0)) == 0)
       panic("u2kvmcopy: pte should exist");
+  //调用 walk 函数，在内核页表中查找给定虚拟地址对应的页表项，并将结果保存在 pte_to 变量
     if ((pte_to = walk(kpagetable, a, 1)) == 0)
       panic("u2kvmcopy: walk fails");
-    pa = PTE2PA(*pte_from);
+    pa = PTE2PA(*pte_from);//从用户页表项中提取物理地址，并将结果保存在 pa 变量
     // 清除PTE_U的标记位
-    flags = (PTE_FLAGS(*pte_from) & (~PTE_U));
-    *pte_to = PA2PTE(pa) | flags;
+    flags = (PTE_FLAGS(*pte_from) & (~PTE_U));//从用户页表项中提取标志，并通过按位与运算符来清除 PTE_U 标志位
+    *pte_to = PA2PTE(pa) | flags;//将经过处理后的物理地址和标志写入内核页表项
   }
 }
