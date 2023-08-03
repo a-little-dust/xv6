@@ -314,20 +314,20 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for (i = 0; i < sz; i += PGSIZE)
   {
-    if ((pte = walk(old, i, 0)) == 0)
+    if ((pte = walk(old, i, 0)) == 0)//// 使用walk函数查找旧页表中虚拟地址为i的页表项
       panic("uvmcopy: pte should exist");
-    if ((*pte & PTE_V) == 0)
+    if ((*pte & PTE_V) == 0)// 检查页表项是否有效，即页是否已经被映射到物理内存
       panic("uvmcopy: page not present");
-    // 设置父进程的PTE_W为不可写，且为COW页
+    // 设置父进程的PTE_W为不可写，并且设置为COW页
     *pte = ((*pte) & (~PTE_W)) | PTE_COW;
-    flags = PTE_FLAGS(*pte);
-    pa = PTE2PA(*pte);
-    // 不为子进程分配内存，指向pa，页表属性设置为flags即可
+    flags = PTE_FLAGS(*pte); // 获取页表项的属性字段
+    pa = PTE2PA(*pte);// 将页表项转换为物理地址
+    // 在新页表中映射子进程的虚拟地址到父进程的物理地址（共享页面）
     if (mappages(new, i, PGSIZE, pa, flags) != 0)
     {
-      goto err;
+      goto err;// 如果映射失败，跳转到错误处理部分
     }
-    kaddref((void *)pa);
+    kaddref((void *)pa);// 增加物理页的引用计数
   }
   return 0;
 
@@ -363,23 +363,23 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while (len > 0)
   {
-    va0 = PGROUNDDOWN(dstva);
-    if (va0 >= MAXVA)
+    va0 = PGROUNDDOWN(dstva);// 将目标虚拟地址向下舍入到页边界
+    if (va0 >= MAXVA)// 检查目标虚拟地址是否超出范围
       return -1;
-    if ((pte = walk(pagetable, va0, 0)) == 0)
+    if ((pte = walk(pagetable, va0, 0)) == 0) // 在页表中查询目标虚拟地址对应的页表项
       return -1;
-    if (((*pte & PTE_V) == 0) || ((*pte & PTE_U)) == 0)
+    if (((*pte & PTE_V) == 0) || ((*pte & PTE_U)) == 0) // 检查页表项是否有效且可用户访问
       return -1;
-    pa0 = PTE2PA(*pte);
+    pa0 = PTE2PA(*pte); // 获取页表项对应的物理地址
     if (((*pte & PTE_W) == 0) && (*pte & PTE_COW))
-    {
+    {// 如果页表项为COW页，但不可写，则进行Copy-on-Write处理
       acquire_refcnt();
       if (kgetref((void *)pa0) == 1)
-      {
+      { // 如果物理页的引用计数为1，直接设置页表项为可写
         *pte = (*pte | PTE_W) & (~PTE_COW);
       }
       else
-      {
+      {// 分配一个新的物理页，并将旧页面内容复制到新页面
         char *mem = kalloc();
         if (mem == 0)
         {
@@ -389,17 +389,18 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
         }
         memmove(mem, (void *)pa0, PGSIZE);
         uint newflags = (PTE_FLAGS(*pte) & (~PTE_COW)) | PTE_W;
+        // 更新页表项为新的物理页
         if (mappages(pagetable, va0, PGSIZE, (uint64)mem, newflags) != 0)
         {
           kfree(mem);
           release_refcnt();
           return -1;
         }
-        kfree((void *)pa0);
+        kfree((void *)pa0);// 释放旧的物理页
       }
       release_refcnt();
     }
-    pa0 = walkaddr(pagetable, va0);
+    pa0 = walkaddr(pagetable, va0);// 获取目标虚拟地址对应的物理地址
     if (pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);

@@ -23,28 +23,24 @@ struct {
   struct spinlock lock;
   struct run *freelist;
   struct spinlock reflock;
-  uint *ref_count;
+  uint *ref_count;//物理内存引用计数器
 } kmem;
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
-  initlock(&kmem.reflock,"kmemref");
+  initlock(&kmem.lock, "kmem");// 初始化内存分配器的锁
+  initlock(&kmem.reflock,"kmemref");// 初始化页面引用计数器的锁
   // end:内核之后的第一个可以内存单元地址，它在kernel.ld中定义
   uint64 rc_pages = ((PHYSTOP - (uint64)end) >> 12) +1; // 物理页数
-  // 计算存放页面引用计数器占用的页数
-  rc_pages = ((rc_pages * sizeof(uint)) >> 12) + 1;
-  // 从end开始存放页引用计数器，需要rc_pages页
-  kmem.ref_count = (uint*)end;
-  // 存放计数器的存储空间大小为：
-  uint64 rc_offset = rc_pages << 12;  
-  freerange(end + rc_offset, (void*)PHYSTOP);
+  rc_pages = ((rc_pages * sizeof(uint)) >> 12) + 1;// 计算引用计数器占用的页数
+  kmem.ref_count = (uint*)end;//将存放引用计数器的起始地址设置为 end，即内核之后的第一个可用内存单元地址
+  uint64 rc_offset = rc_pages << 12;  // 计算引用计数器存储空间大小
+  freerange(end + rc_offset, (void*)PHYSTOP);// 调用freerange函数初始化空闲链表
 }
  
-// 将地址转换为物理页号
 inline int
-kgetrefindex(void *pa)
+kgetrefindex(void *pa)//这是一个内联函数，用于将物理地址转换为对应的引用计数器索引
 {
    return ((char*)pa - (char*)PGROUNDUP((uint64)end)) >> 12;
 }
@@ -115,23 +111,23 @@ kalloc(void)
 }
 //辅助函数
 int kgetref(void *pa)
-{
+{//获取给定物理地址 pa 对应的引用计数
   return kmem.ref_count[kgetrefindex(pa)];
 }
 
 void kaddref(void *pa)
-{
+{//给给定的物理地址 pa 对应的引用计数加一
   kmem.ref_count[kgetrefindex(pa)]++;
 }
 
 inline void
 acquire_refcnt()
-{
+{//获取页面引用计数器的锁
   acquire(&kmem.reflock);
 }
 
 inline void
 release_refcnt()
-{
+{//释放之前获取的页面引用计数器的锁
   release(&kmem.reflock);
 }
