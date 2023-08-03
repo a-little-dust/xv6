@@ -51,8 +51,8 @@ sys_sbrk(void)
   //if (addr + n < 0) return -1;
   if (addr + n >= MAXVA || addr + n <= 0)
     return addr;
-  p->sz = addr + n;
-  //if(growproc(n) < 0)
+  p->sz = addr + n;//将进程的内存大小增加n个字节
+  //if(growproc(n) < 0) //不执行growproc，不分配内存
   //  return -1;
   if(n < 0)
     uvmdealloc(p->pagetable, addr, p->sz);

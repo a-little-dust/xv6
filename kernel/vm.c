@@ -98,21 +98,21 @@ walkaddr(pagetable_t pagetable, uint64 va)
 {
   pte_t *pte;
   uint64 pa;
-
   if(va >= MAXVA)
     return 0;
-
-  pte = walk(pagetable, va, 0);
+  pte = walk(pagetable, va, 0); 
   //if(pte == 0)
   //  return 0;
   //if((*pte & PTE_V) == 0)
   //  return 0;
   if (pte == 0 || (*pte & PTE_V) == 0) {
-    //pa = lazyalloc(va);
-    struct proc *p = myproc();
+    //如果pte无效，就进行分配
+    struct proc *p = myproc();//获取当前进程的指针
+    //检查虚拟地址 va 是否超出了进程的地址空间范围或者低于用户栈的上限
     if(va >= p->sz || va < PGROUNDUP(p->trapframe->sp)) return 0;
-    pa = (uint64)kalloc();
-    if (pa == 0) return 0;
+    pa = (uint64)kalloc();//分配一页物理内存，并将其物理地址存储在变量 pa 中
+    if (pa == 0) return 0;//检查物理内存分配是否成功
+    //调用 mappages 函数将虚拟地址 va 映射到物理地址 pa，并设置相应的页表项标志
     if (mappages(p->pagetable, va, PGSIZE, pa, PTE_W|PTE_R|PTE_U|PTE_X) != 0) {
       kfree((void*)pa);
 	  return 0;
@@ -194,10 +194,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0)
+    if((pte = walk(pagetable, a, 0)) == 0)//页表中没有相应的映射记录
       //panic("uvmunmap: walk");
       continue;
-    if((*pte & PTE_V) == 0)
+    if((*pte & PTE_V) == 0)//查找到虚拟地址对应的页表项后，发现该页表项的有效位（PTE_V）为0
       continue;
       //panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
@@ -328,7 +328,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   uint64 pa, i;
   uint flags;
   char *mem;
-
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       continue;
@@ -347,7 +346,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     }
   }
   return 0;
-
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
