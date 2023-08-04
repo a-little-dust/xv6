@@ -47,15 +47,15 @@ void put(int key, int value)
     if (e->key == key)
       break;
   }
-  pthread_mutex_lock(locks + i);
+  pthread_mutex_lock(locks + i); // 获取对应哈希桶的互斥锁，保证线程安全
   if(e){
     // update the existing key.
     e->value = value;
   } else {
-    // the new is new.
+    // the new is new.插入新的键值对到哈希表中
     insert(key, value, &table[i], table[i]);
   }
-  pthread_mutex_unlock(locks + i);
+  pthread_mutex_unlock(locks + i);// 释放对应哈希桶的互斥锁
 }
 
 static struct entry*
@@ -104,7 +104,7 @@ main(int argc, char *argv[])
 {
   for (int i = 0; i < NBUCKET; i++) {
         pthread_mutex_init(locks + i, NULL);
-    }//给每个散列加一把锁
+    }//初始化锁
   pthread_t *tha;
   void *value;
   double t1, t0;

@@ -22,24 +22,26 @@ barrier_init(void)
   bstate.nthread = 0;
 }
 
-static void 
+static void
 barrier()
 {
   // YOUR CODE HERE
   //
-  // Block until all threads have called barrier() and
+  // Block 直到所有线程调用了barrier()函数 and
   // then increment bstate.round.
   //
-  pthread_mutex_lock(&bstate.barrier_mutex);
-  if (++bstate.nthread < nthread) {
+  pthread_mutex_lock(&bstate.barrier_mutex); // 获取互斥锁
+  if (++bstate.nthread < nthread)
+  { // 如果还有其他线程未到达屏障，则等待
     pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
-  } else {
-    bstate.nthread = 0;
-    bstate.round++;
-    pthread_cond_broadcast(&bstate.barrier_cond);
   }
-  pthread_mutex_unlock(&bstate.barrier_mutex); 
-  
+  else
+  {
+    bstate.nthread = 0;                           // 将nthread重置为0，以便下一轮使用
+    bstate.round++;                               // 增加屏障轮次
+    pthread_cond_broadcast(&bstate.barrier_cond); // 广播唤醒所有等待的线程
+  }
+  pthread_mutex_unlock(&bstate.barrier_mutex); // 释放barrier互斥锁
 }
 
 static void *
