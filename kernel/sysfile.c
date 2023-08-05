@@ -323,28 +323,31 @@ sys_open(void)
   }
 
   //补充
-  if(ip->type == T_SYMLINK){
+  if(ip->type == T_SYMLINK){//检查inode的类型是否为符号链接
     if(!(omode & O_NOFOLLOW)){
       int cycle = 0;
-      char target[MAXPATH];
-      while(ip->type == T_SYMLINK){
-        if(cycle == 10){
-          iunlockput(ip);
+      char target[MAXPATH];//创建一个字符数组，用于存储符号链接的目标路径
+      while (ip->type == T_SYMLINK)
+      { // 循环处理符号链接，直到遇到非符号链接的文件或达到最大循环次数
+        if (cycle == 10)
+        {
+          iunlockput(ip); // 解锁
           end_op();
           return -1; // max cycle
         }
         cycle++;
-        memset(target, 0, sizeof(target));
-        readi(ip, 0, (uint64)target, 0, MAXPATH);
-        iunlockput(ip);
-        if((ip = namei(target)) == 0){
+        memset(target, 0, sizeof(target));        // 清空目标路径字符数组
+        readi(ip, 0, (uint64)target, 0, MAXPATH); // 从符号链接的数据块中读取目标路径
+        iunlockput(ip);                           // 解锁
+        if ((ip = namei(target)) == 0)            // 根据目标路径获取对应的inode
+        {                                         // 若获取失败
           end_op();
           return -1; // target not exist
         }
-        ilock(ip);
+        ilock(ip); // 获取新的inode的锁
       }
     }
-  }//
+  }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
     if(f)
@@ -509,31 +512,31 @@ sys_pipe(void)
   return 0;
 }
 
-uint64
-sys_symlink(void)
+uint64 sys_symlink(void)
 {
-  char target[MAXPATH];
-  memset(target, 0, sizeof(target));
-  char path[MAXPATH];
+  
+  char target[MAXPATH];// 创建一个用于存储目标路径的字符数组
+  memset(target, 0, sizeof(target)); //初始化为零
+  char path[MAXPATH];// 创建一个用于存储链接路径的字符数组
+  // 获取目标路径和链接路径参数，如果获取失败则返回-1
   if(argstr(0, target, MAXPATH) < 0 || argstr(1, path, MAXPATH) < 0){
     return -1;
-  }
-  
-  struct inode *ip;
-
-  begin_op();
+  } 
+  struct inode *ip; 
+  begin_op();// 开始文件系统操作
+  // 创建一个符号链接节点，并返回inode指针。若创建失败则结束文件系统操作并返回-1
   if((ip = create(path, T_SYMLINK, 0, 0)) == 0){
     end_op();
     return -1;
   }
-
+  // 将目标路径写入到符号链接节点的数据块中，写入失败则返回-1
   if(writei(ip, 0, (uint64)target, 0, MAXPATH) != MAXPATH){
     // panic("symlink write failed");
     return -1;
   }
-
-  iunlockput(ip);
-  end_op();
+  iunlockput(ip);// 解锁并放置inode 
+  end_op();// 结束文件系统操作
   return 0;
 }
+
 

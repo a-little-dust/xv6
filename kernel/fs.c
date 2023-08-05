@@ -365,15 +365,14 @@ iunlockput(struct inode *ip)
   iput(ip);
 }
 
-// Inode content
-//
-// The content (data) associated with each inode is stored
-// in blocks on the disk. The first NDIRECT block numbers
-// are listed in ip->addrs[].  The next NINDIRECT blocks are
-// listed in block ip->addrs[NDIRECT].
+// Inode内容
+//存储与每个索引节点相关联的内容(数据)
+//在磁盘上以块为单位。第一个NDIRECT块编号
+//在ip->addrs[]中列出。下一个NINDIRECT块是
+//列出块ip->地址[NDIRECT]。
 
-// Return the disk block address of the nth block in inode ip.
-// If there is no such block, bmap allocates one.
+//返回inode ip中第n块的磁盘块地址。
+//如果没有这样的块，bmap分配一个。
 static uint
 bmap(struct inode *ip, uint bn)
 {
@@ -452,47 +451,49 @@ itrunc(struct inode *ip)
   struct buf *bp;
   uint *a;
 
-  for(i = 0; i < NDIRECT; i++){
-    if(ip->addrs[i]){
-      bfree(ip->dev, ip->addrs[i]);
-      ip->addrs[i] = 0;
-    }
+//用于处理直接块
+  for(i = 0; i < NDIRECT; i++) {
+  if(ip->addrs[i]) { // 检查直接块地址是否存在
+    bfree(ip->dev, ip->addrs[i]); // 释放直接块
+    ip->addrs[i] = 0; // 将直接块地址设置为0，表示不再使用
   }
-//用于处理一级链表
-  if(ip->addrs[NDIRECT]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT]);
-    a = (uint*)bp->data;
-    for(j = 0; j < NINDIRECT; j++){
-      if(a[j])
-        bfree(ip->dev, a[j]);
-    }
-    brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT]);
-    ip->addrs[NDIRECT] = 0;
+}
+// 用于处理一级链表
+if(ip->addrs[NDIRECT]) { // 检查一级链表是否存在
+  bp = bread(ip->dev, ip->addrs[NDIRECT]); // 读取一级块表所在的磁盘块
+  a = (uint*)bp->data; // 将磁盘块的数据转换为uint类型数组
+  for(j = 0; j < NINDIRECT; j++) {
+    if(a[j]) // 如果当前间接块地址不为0，表示该块被使用
+      bfree(ip->dev, a[j]); // 释放该块
   }
-  //加一段，用于处理二级链表
-  if(ip->addrs[NDIRECT + 1]){
-    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
-    a = (uint*)bp->data;
+  brelse(bp); // 释放磁盘块对应的缓冲区
+  bfree(ip->dev, ip->addrs[NDIRECT]); // 释放一级块表所在的磁盘块
+  ip->addrs[NDIRECT] = 0; // 将一级块表地址设置为0，表示不再使用
+}
 
-    struct buf *bpd;
-    uint* b;
-    for(j = 0; j < NINDIRECT; j++){
-      if(a[j]){
-        bpd = bread(ip->dev, a[j]);
-        b = (uint*)bpd->data;
-        for(int k = 0; k < NINDIRECT; k++){
-          if(b[k])
-            bfree(ip->dev, b[k]);
-        }
-        brelse(bpd);
-        bfree(ip->dev, a[j]);
+// 用于处理二级链表
+if(ip->addrs[NDIRECT + 1]) { // 检查二级链表是否存在
+  bp = bread(ip->dev, ip->addrs[NDIRECT + 1]); // 读取二级块表所在的磁盘块
+  a = (uint*)bp->data; // 将磁盘块的数据转换为uint类型数组
+
+  struct buf *bpd;
+  uint* b;
+  for(j = 0; j < NINDIRECT; j++) {
+    if(a[j]) { // 如果当前一级块地址不为0，表示该块被使用
+      bpd = bread(ip->dev, a[j]); // 读取二级块表所在的磁盘块
+      b = (uint*)bpd->data; // 将磁盘块的数据转换为uint类型数组
+      for(int k = 0; k < NINDIRECT; k++) {
+        if(b[k]) // 如果当前间接块地址不为0，表示该块被使用
+          bfree(ip->dev, b[k]); // 释放该块
       }
+      brelse(bpd); // 释放磁盘块
+      bfree(ip->dev, a[j]); // 释放一级块表中的块
     }
-    brelse(bp);
-    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
-    ip->addrs[NDIRECT + 1] = 0;
   }
+  brelse(bp); // 释放磁盘块
+  bfree(ip->dev, ip->addrs[NDIRECT + 1]); // 释放二级块表所在的磁盘块
+  ip->addrs[NDIRECT + 1] = 0; // 将二级块表地址设置为0，表示不再使用
+}
 
   ip->size = 0;
   iupdate(ip);
