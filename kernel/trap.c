@@ -72,11 +72,10 @@ usertrap(void)
     // ok
   } // 补充
   else if (r_scause() == 0xd || r_scause() == 0xf)
-  {
+  {//页面访问或页面加载错误
     // 因为包含关系的问题, 我们直接把函数放到 sysfile.c 里面
-    // printf("%p\n%p\n", r_stval(), PGROUNDDOWN(r_stval()));
-    if (!map_mmap(p, r_stval()))
-    {
+    if (!map_mmap(p, r_stval()))//调用map_mmap函数进行内存映射操作
+    {//如果映射操作失败
       printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
       printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
       p->killed = 1;

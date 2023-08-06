@@ -484,35 +484,45 @@ sys_pipe(void)
   }
   return 0;
 }
-//
+//add
 int filewrite_offset(struct file *f, uint64 addr, int n, int offset)
 {
     int r, ret = 0;
+    // 检查文件是否可写，如果不可写则直接返回-1表示失败
     if(f->writable == 0)
         return -1;
+    // 检查文件类型是否为FD_INODE，如果不是，则触发panic异常
     if(f->type != FD_INODE) {
         panic("filewrite: only FINODE implemented!");
     }
-
+    // 计算每次写入的最大字节数
+    //操作块的最大数量-（操作系统占用的2个块和1个额外缓冲区的占用）
     int max = ((MAXOPBLOCKS-1-1-2) / 2) * BSIZE;
     int i = 0;
+    // 循环写入数据
     while(i < n) {
         int n1 = n - i;
         if(n1 > max)
             n1 = max;
-
+        // 开始文件系统操作
         begin_op();
+        // 锁定inode
         ilock(f->ip);
+       // 调用writei函数写入数据，并更新offset
         if ((r = writei(f->ip, 1, addr + i, offset, n1)) > 0)
             offset += r;
+        // 解锁inode
         iunlock(f->ip);
+        // 结束文件系统操作
         end_op();
-
+        // 如果写入的字节数与期望的不一致，跳出循环
         if(r != n1) {
             break;
         }
+        // 更新已写入的字节数
         i += r;
     }
+    // 根据实际写入的字节数判断写入是否成功，并返回结果
     ret = (i == n ? n : -1);
     return ret;
 }
@@ -555,66 +565,73 @@ uint64 sys_mmap (void){
     return -1;
 }
 
-uint64 sys_munmap (void){
-  uint64 addr;
-  int length;
-  // 获取参数
-  if(argaddr(0, &addr) < 0 || argint(1, &length) < 0)
-    return -1;
-  struct proc* p = myproc();
-  for(int i = 0; i < MAXVMA; ++i) {
-    struct VMA* v = &(p->vma[i]);
-    // 左闭右开
-    if(v->length != 0 && addr < v->end && addr >= v->start) {
-      int should_close = 0;
-      int offset = v->offset;
-      addr = PGROUNDDOWN(addr);
-      length = PGROUNDUP(length);
-      // 是否从 start 开始
-      if(addr == v->start) {
-        // 是否释放整个文件
-        if(length == v->length) {
-          v->length = 0;
-          // 不能在这个时候释放, 得在写回之后
-          should_close = 1;
-        } else {
-          v->start += length;
-          v->length -= length;
-          v->offset += length;
+uint64 sys_munmap(void)
+{
+    uint64 addr; // 存储要解除映射的起始地址
+    int length;  // 存储要解除映射的长度
+    // 获取参数
+    if (argaddr(0, &addr) < 0 || argint(1, &length) < 0)
+        return -1;
+    struct proc *p = myproc(); // 获取当前进程的指针
+    for (int i = 0; i < MAXVMA; ++i)
+    {
+        struct VMA *v = &(p->vma[i]);
+        // 检查当前VMA是否有效
+        if (v->length != 0 && addr < v->end && addr >= v->start)
+        {
+            int should_close = 0; // 标记是否需要关闭文件
+            int offset = v->offset;
+            addr = PGROUNDDOWN(addr);
+            length = PGROUNDUP(length);
+            // 是否从 start 开始
+            if (addr == v->start)
+            {
+              // 是否释放整个文件
+              if (length == v->length)
+              {
+                v->length = 0;
+                // 表示需要关闭与VMA相关联的文件。但不能在这个时候释放, 得在写回之后
+                should_close = 1;
+              }
+              else
+              { // 如果不是释放整个文件
+                v->start += length;
+                v->length -= length;
+                v->offset += length;
+              }
+            }
+            else
+            { // 解除映射的起始地址与VMA的起始地址不相同
+              // 根据要求这个时候只能是释放到结尾
+              v->length -= length;
+            }
+            // 处理 MAP_SHARED
+            if (v->flags & MAP_SHARED)
+            {
+              // 在给定的文件中将指定地址范围的数据写入到偏移量为offset的位置
+              filewrite_offset(v->file, addr, length, offset);
+            }
+            // 解除映射
+            uvmunmap(p->pagetable, addr, length / PGSIZE, 1);
+            if (should_close)
+              fileclose(v->file);
         }
-      } else {
-        // 根据要求这个时候只能是释放到结尾
-        v->length -= length;
-      }
-      // 处理 MAP_SHARED
-      if(v->flags & MAP_SHARED) {
-        // 一种简单的实现就是直接把整个文件写回去
-        // !!!!(不行, 可能现在的映射已经不是整个文件)
-        filewrite_offset(v->file, addr, length, offset);
-      }
-      // 解除映射
-      // 这里还有些问题, 可能并没有映射
-      // if(walkaddr(p->pagetable, addr) != 0)
-      uvmunmap(p->pagetable, addr, length/PGSIZE, 1);
-      if(should_close)
-        fileclose(v->file);
     }
-  }
-  return 0;
+    return 0;
 }
 
 int map_mmap(struct proc *p, uint64 addr)
 {
-  // 遍历 vma 找到具体的文件
+  // 遍历 vma 数组，找到具体的文件
   for (int i = 0; i < MAXVMA; ++i)
   {
     struct VMA *v = &(p->vma[i]);
-    // 左闭右开
+    // 检查当前VMA是否有效，并且给定地址addr位于VMA的范围内。范围是左闭右开的。
     if (v->length != 0 && addr < v->end && addr >= v->start)
     {
-      uint64 start = PGROUNDDOWN(addr);
-      // uint64 end = PGROUNDUP(addr);
+      uint64 start = PGROUNDDOWN(addr);//获取页面的起始地址
       // 可能释放了一部分, 但是后面部分没有建立映射(offset)
+      //等于从VMA的起始地址开始的偏移量加上VMA的偏移量。这个偏移量用于指定从文件中读取数据的位置。
       uint64 offset = start - v->start + v->offset;
 
       // 申请一块空间
@@ -630,7 +647,7 @@ int map_mmap(struct proc *p, uint64 addr)
       // PROT_WRITE      0x2   PTE_W (1L << 2)
       // PROT_EXEC       0x4   PTE_X (1L << 3)
       //                       PTE_U (1L << 4)
-      // 建立映射关系
+      // 建立映射关系,它会更新进程p的页表，将指定地址范围映射到刚刚分配的内存空间，并设置相关的权限标志
       if (mappages(p->pagetable, start, PGSIZE,
                    (uint64)mem, (v->prot << 1) | PTE_U) != 0)
       {
@@ -640,8 +657,7 @@ int map_mmap(struct proc *p, uint64 addr)
 
       // 读取文件
       ilock(v->file->ip);
-      // 1 表示虚拟地址
-      readi(v->file->ip, 1, start, offset, PGSIZE);
+      readi(v->file->ip, 1, start, offset, PGSIZE);//读取数据，写入刚才分配的内存空间中。1表示虚拟地址。
       iunlock(v->file->ip);
       return 1;
     }

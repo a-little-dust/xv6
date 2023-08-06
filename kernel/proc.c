@@ -302,14 +302,16 @@ fork(void)
 
   np->state = RUNNABLE;
 
-  for(int i = 0; i < MAXVMA; ++i) {
-    if(p->vma[i].length) {
-        memmove(&(np->vma[i]), &(p->vma[i]), sizeof(struct VMA));
-        filedup(p->vma[i].file);
-    } else {
-        np->vma[i].length = 0;
+  for (int i = 0; i < MAXVMA; ++i)
+  {
+    if (p->vma[i].length)// 检查原进程中的VMA是否存在
+    {// 如果存在，则将其复制到新进程的相应VMA结构中
+      memmove(&(np->vma[i]), &(p->vma[i]), sizeof(struct VMA));
+      filedup(p->vma[i].file);// 复制文件结构，并增加引用计数
     }
-}
+    else // 如果不存在，则将新进程的相应VMA的长度设置为0
+      np->vma[i].length = 0;
+  }
 
   release(&np->lock);
 
