@@ -92,73 +92,61 @@ e1000_init(uint32 *xregs)
   regs[E1000_IMS] = (1 << 7); // RXDW -- Receiver Descriptor Write Back
 }
 
-int
-e1000_transmit(struct mbuf *m)
+int e1000_transmit(struct mbuf *m)
 {
   //
-  // Your code here.
+  // 在这里填写你的代码。
   //
-  // the mbuf contains an ethernet frame; program it into
-  // the TX descriptor ring so that the e1000 sends it. Stash
-  // a pointer so that it can be freed after sending.
+  // mbuf包含一个以太网帧；将其程序化到TX描述符环中，以便e1000发送它。保存一个指针，以便在发送后释放。
   //
-  acquire(&e1000_lock);
-
-  uint32 idx = regs[E1000_TDT];
-  struct tx_desc* desc = &tx_ring[idx];
-
+  acquire(&e1000_lock);  // 获取e1000锁，保证线程安全
+  uint32 idx = regs[E1000_TDT];  // 获取当前可用的TX描述符索引
+  struct tx_desc* desc = &tx_ring[idx];  // 获取当前可用的TX描述符
+//检查TX描述符的状态字段，如果标志位E1000_TXD_STAT_DD未设置（表示空闲），则表示发送缓冲区已经被占用，直接返回失败。
   if((desc->status & E1000_TXD_STAT_DD) == 0){
     release(&e1000_lock);
     printf("buffer overflow\n");
     return -1;
   }
-
   if(tx_mbufs[idx])
-    mbuffree(tx_mbufs[idx]);
-  
-  desc->addr = (uint64)m->head;
-  desc->length = m->len;
-  desc->cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;
-  tx_mbufs[idx] = m;
+    mbuffree(tx_mbufs[idx]);  // 释放之前存储的mbuf
 
-  regs[E1000_TDT] = (idx + 1) % TX_RING_SIZE;
-  __sync_synchronize();
-  release(&e1000_lock);
+  desc->addr = (uint64)m->head;  // 设置TX描述符的地址字段为mbuf的头部地址
+  desc->length = m->len;  // 设置TX描述符的长度字段为mbuf的长度
+  desc->cmd = E1000_TXD_CMD_RS | E1000_TXD_CMD_EOP;  // 设置TX描述符的命令字段
+  tx_mbufs[idx] = m;  // 保存mbuf的指针，以便在发送完成后释放
+
+  regs[E1000_TDT] = (idx + 1) % TX_RING_SIZE;  // 更新TX描述符环的TDT（Transmit Descriptor Tail）指针
+  __sync_synchronize();  // 同步内存，确保写入操作完成
+  release(&e1000_lock);  // 释放e1000锁
   return 0;
 }
 
-static void
-e1000_recv(void)
-{
-  //
-  // Your code here.
-  //
-  // Check for packets that have arrived from the e1000
-  // Create and deliver an mbuf for each packet (using net_rx()).
-  //
-  int idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
-  struct rx_desc* desc = &rx_ring[idx];
+static void e1000_recv(void)
+{ // 在这里填写你的代码。
+  // 检查从e1000接收到的数据包
+  // 为每个数据包创建并传递一个mbuf（使用net_rx()函数）。
+  int idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;  // 计算下一个要处理的RX描述符索引
+  struct rx_desc* desc = &rx_ring[idx];  // 获取当前要处理的RX描述符
 
-  while(desc->status & E1000_RXD_STAT_DD){
-    acquire(&e1000_lock);
+  while(desc->status & E1000_RXD_STAT_DD){//数据包已到达
+    acquire(&e1000_lock);  // 获取e1000锁，保证线程安全性
 
-    struct mbuf *buf = rx_mbufs[idx];
-    mbufput(buf, desc->length);
-    
-    rx_mbufs[idx] = mbufalloc(0);
+    struct mbuf *buf = rx_mbufs[idx];  // 从rx_mbufs中获取存储的mbuf指针
+    mbufput(buf, desc->length);  // 将desc->length赋值给buf的长度字段
+    rx_mbufs[idx] = mbufalloc(0);  // 分配新的mbuf内存空间
     if (!rx_mbufs[idx])
-      panic("mbuf alloc failed");
-    desc->addr = (uint64) rx_mbufs[idx]->head;
-    desc->status = 0;
+      panic("mbuf alloc failed");  // 如果mbuf分配失败，则触发panic异常
 
-    regs[E1000_RDT] = idx;
-    __sync_synchronize();
-    release(&e1000_lock);
+    desc->addr = (uint64) rx_mbufs[idx]->head;  // 设置RX描述符的地址字段为新mbuf的头部地址
+    desc->status = 0;  // 清空RX描述符的状态字段，表示已经处理完成
+    regs[E1000_RDT] = idx;  // 更新RX描述符环的RDT（Receive Descriptor Tail）指针
+    __sync_synchronize();  // 同步内存，确保写入操作完成
 
-    net_rx(buf);
-    
-    idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
-    desc = &rx_ring[idx];
+    release(&e1000_lock);  // 释放e1000锁
+    net_rx(buf);  // 将接收到的mbuf传递给上层网络栈进行进一步处理
+    idx = (regs[E1000_RDT] + 1) % RX_RING_SIZE;  // 计算下一个要处理的RX描述符索引
+    desc = &rx_ring[idx];  // 获取当前要处理的RX描述符
   }
 }
 
